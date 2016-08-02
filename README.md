@@ -2,6 +2,8 @@
 STC3117 fuel gauge Open source generic driver
 (STC3117 Generic Driver)
 
+Driver type: LLD (Low level driver), platform independant
+
 Device under test:
 ----------------
 Device:       STC3117 Battery Gas gauge  
