@@ -1,8 +1,8 @@
-/******************** (C) COPYRIGHT 2015 STMicroelectronics ********************
+/******************** (C) COPYRIGHT STMicroelectronics ********************
 * File Name          : MainExample.c
 * Author             : AMS application
-* Version            : V1.01
-* Date               : 2015/09/01
+* Version            : V1.02
+* Date               : 2016/09/01
 * Description        : STC3117 gas gauge init example
 ********************************************************************************
 * THE PRESENT SOFTWARE WHICH IS FOR GUIDANCE ONLY AIMS AT PROVIDING CUSTOMERS
@@ -36,8 +36,11 @@ int main(void)
 	int status;
 	int CounterValue;
 	int i;
+	int BatteryMonitoringEnabled = 1; //true
 
-	volatile char HardwareShutDown = 0; //Optional: set to 1 when the user power down the hardware, and no need to monitor the battery
+	//Optional: HardwareShutDown set to 1 when the user power down the hardware, and no need to monitor the battery. 
+	//But not the recommanded case, as it is better to have the gas gauge always running for better accuracy, even the rest of the system is powered down
+	volatile char HardwareShutDown = 0; 
 
 
 GasGauge_Restart:
@@ -114,12 +117,14 @@ GasGauge_Restart:
 	}
 
 
-	while(1) //main infinite loop
+	while(BatteryMonitoringEnabled == 1) //main infinite loop
 	{
 		if(HardwareShutDown == 1)
 		{
 			status = GasGauge_Stop();
 			if(status != 0) printf("Error in GasGauge_Stop\n");
+
+			BatteryMonitoringEnabled = 0; //end of monitoring
 		}
 		else //normal case
 		{
@@ -171,9 +176,9 @@ static void GasGaugeDefaultInit(GasGauge_DataTypeDef * GG_struct)
 {
 	//structure initialisation
 
-	GG_struct->Cnom = 1450;        /* nominal capacity in mAh */
-	GG_struct->CC_cnf = 293;      /* nominal CC_cnf */
-	GG_struct->VM_cnf = 297;      /* nominal VM cnf */
+	GG_struct->Cnom = 1450;        /* nominal capacity in mAh */  //Warning: Battery dependant. Put the corresponding used value.
+	GG_struct->CC_cnf = 293;      /* nominal CC_cnf */  //Warning: Battery dependant. Put the corresponding used value.
+	GG_struct->VM_cnf = 297;      /* nominal VM cnf */  //Warning: Battery dependant. Put the corresponding used value.
 
 
 	GG_struct->SoctabValue[15]=100*2;    /* SOC curve adjustment 100%*/
@@ -225,7 +230,7 @@ static void GasGaugeDefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->Alm_Vbat = 3600;    /* Vbat alm level mV*/
 
 
-	GG_struct->Rsense = 10;      /* sense resistor mOhms*/
+	GG_struct->Rsense = 10;      /* sense resistor mOhms*/ //Warning: Hardware dependant. Put the corresponding used value
 	GG_struct->RelaxCurrent = GG_struct->Cnom/20; /* current for relaxation (< C/20) mA*/
 
 	GG_struct->ForceExternalTemperature = 0; //do not force Temperature but Gas gauge measures it
@@ -252,7 +257,7 @@ static int GasGaugeTimerFinished(void)
 
 static void Delay_ms(unsigned int value) 
 {
-	//quick and dirty delay function implementation
+	//quick and dirty delay function implementation. Use a real timer instead.
 
 	unsigned int i,j;
 	volatile int dummy = 0;
