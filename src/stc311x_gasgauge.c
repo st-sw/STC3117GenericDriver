@@ -43,7 +43,6 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 
 
 
-
 /* Private define ------------------------------------------------------------*/
 
 
@@ -51,8 +50,12 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 /*        SPECIAL FUNCTIONS                                                         */
 /* -------------------------------------------------------------------------------- */
 /*                                                                                  */
-/* define TEMPCOMP_SOC to enable SOC temperature compensation */
-#define TEMPCOMP_SOC
+/* define TEMP_COMPENSATION_SOC to enable SOC temperature compensation */
+#define TEMP_COMPENSATION_SOC
+
+#define OCV_RAM_BACKUP
+
+//#define BATD_UC8 //Optional: basic reset of the gas gauge in case of error event occurs (BATD or UVLO)
 
 /* ******************************************************************************** */
 
@@ -64,7 +67,7 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 /*                                                                                  */
 #define BATT_CHG_VOLTAGE   4250   /* min voltage at the end of the charge (mV)      */
 #define BATT_MIN_VOLTAGE   3300   /* nearly empty battery detection level (mV)      */
-#define MAX_HRSOC          51200  /* 100% in 1/512% units*/
+#define MAX_HRSOC          51200  /* HRSOC (Higher Resolution SOC): 100% in 1/512% units */
 #define MAX_SOC            1000   /* 100% in 0.1% units */
 /*                                                                                  */
 #define CHG_MIN_CURRENT     150   /* min charge current in mA                       */
@@ -162,15 +165,15 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 
 
 
-#define M_STAT 0x1010       /* GG_RUN & PORDET mask in STC311x_BattDataTypeDef status word */
-#define M_RST  0x1800       /* BATFAIL & PORDET mask */
-#define M_RUN  0x0010       /* GG_RUN mask in STC311x_BattDataTypeDef status word */
-#define M_GGVM 0x0400       /* GG_VM mask */
-#define M_BATFAIL 0x0800    /* BATFAIL mask*/
+#define M_STATUS_MSK 0x1010       /* GG_RUN & PORDET mask in STC311x_BattDataTypeDef status word */
+#define M_RST_ERR_MSK 0x1800       /* BATFAIL & PORDET mask */
+#define M_RUN_MSK  0x0010       /* GG_RUN mask in STC311x_BattDataTypeDef status word */
+#define M_GGVM_MSK 0x0400       /* GG_VM mask */
+#define M_BATFAIL_MSK 0x0800    /* BATFAIL mask*/
 #ifdef STC3117
-#define M_UVLOD   0x8000    /* UVLOD mask (STC3117 only) */
+#define M_UVLOD_MSK   0x8000    /* UVLOD mask (STC3117 only) */
 #endif
-#define M_VMOD 0x0001       /* VMODE mask */
+#define M_VMOD_MSK 0x0001       /* VMODE mask */
 
 #define STC31XX_OK 0
 
@@ -190,8 +193,8 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 #define GG_RUNNING  'R'
 #define GG_POWERDN  'D'
 
-#define VM_MODE 1
-#define CC_MODE 0
+#define VM_MODE 1  // Voltage mode
+#define CC_MODE 0  // Mixed mode
 
 
 
@@ -213,7 +216,7 @@ typedef struct  {
 	int Voltage;     /* voltage in mV            */
 	int Current;     /* current in mA            */
 	int Temperature; /* temperature in 0.1°C     */
-	int HRSOC;       /* uncompensated SOC in 1/512%   */
+	int HRSOC;       /* High Resolution uncompensated SOC in 1/512%   */
 	int OCV;         /* OCV in mV*/
 	int ConvCounter; /* convertion counter       */
 	int RelaxTimer;  /* current relax timer value */
@@ -265,7 +268,7 @@ static STC311x_BattDataTypeDef BattData;   /* STC311x data */
 static union {
 	unsigned char db[RAM_SIZE];  /* last byte holds the CRC */
 	struct {
-		short int TstWord;     /* 0-1 */
+		short int TestWord;     /* 0-1 Test Word for verification */
 		short int HRSOC;       /* 2-3 SOC backup */
 		short int CC_cnf;      /* 4-5 current CC_cnf */
 		short int VM_cnf;      /* 6-7 current VM_cnf */
@@ -324,12 +327,12 @@ static int STC31xx_Write(int NumberOfBytes, int RegAddress , unsigned char *TxBu
 static int STC31xx_Read(int NumberOfBytes, int RegAddress , unsigned char *RxBuffer)
 {
 	int retry;
-	int res=-1;
+	int res = -1;
 
 	for (retry=0; retry < NBRETRY; retry++)
 	{
 		res = I2C_ReadBytes(STC31xx_SLAVE_ADDRESS, RegAddress, RxBuffer, NumberOfBytes);
-		if (res==STC31XX_OK) break;
+		if (res == STC31XX_OK) break;
 	}
 	return(res);    
 }
@@ -425,7 +428,7 @@ int STC31xx_ReadUnsignedWord16(unsigned short RegAddress, unsigned short * RegDa
 		/* no error */
 		data16 = data8[1];
 		data16 = (data16 <<8) | data8[0];
-		
+
 		*RegData = data16;
 	}
 	else
@@ -545,17 +548,17 @@ int STC31xx_GetRunningCounter(void)
 
 
 /*******************************************************************************
-* Function Name  : STC311x_SetParam
+* Function Name  : STC311x_SetInitialParam
 * Description    :  initialize the STC311x parameters
 * Input          : rst: init algo param
 * Return         : 0
 *******************************************************************************/
-static void STC311x_SetParam(void)
+static void STC311x_SetInitialParam(void)
 {
 	int value;
 	int i;
 
-	STC31xx_WriteByte8(STC311x_REG_MODE,0x01);  /*   set GG_RUN=0 before changing algo parameters */
+	STC31xx_WriteByte8(STC311x_REG_MODE, 0x01);  /*   set GG_RUN=0 before changing algo parameters */
 
 	/* init OCV curve */
 #ifdef STC3115  
@@ -563,15 +566,18 @@ static void STC311x_SetParam(void)
 #endif
 #ifdef STC3117
 	for (i=0; i < OCVTAB_SIZE; i++)
-		if (BattData.OcvValue[i]!=0) STC31xx_WriteWord16(STC311x_REG_OCVTAB + i*OCVTAB_BYTECOUNT, BattData.OcvValue[i]*100/55);
+	{
+		if (BattData.OcvValue[i] !=0) STC31xx_WriteWord16(STC311x_REG_OCVTAB + i*OCVTAB_BYTECOUNT, BattData.OcvValue[i]*100/55);
+	}
 
 	//if new SOCTAB value from user, overwrite the default register values.
-	if (BattData.SoctabValue[1]!=0) STC31xx_Write(SOCTAB_SIZE, STC311x_REG_SOCTAB, (unsigned char *) BattData.SoctabValue);
+	if (BattData.SoctabValue[1] !=0) STC31xx_Write(SOCTAB_SIZE, STC311x_REG_SOCTAB, (unsigned char *) BattData.SoctabValue);
 #endif
 
-	/* set alm level if different from default */
+	/* set alarm level if different from default */
 	if (BattData.Alm_SOC !=0 )   
 		STC31xx_WriteByte8(STC311x_REG_ALARM_SOC,BattData.Alm_SOC*2); 
+
 	if (BattData.Alm_Vbat !=0 ) 
 	{
 		value= ((BattData.Alm_Vbat << 9) / VoltageFactor); /* LSB=8*2.44mV */
@@ -579,18 +585,19 @@ static void STC311x_SetParam(void)
 	}
 
 	/* relaxation timer */
-	if (BattData.RelaxThreshold !=0 )  
+	if (BattData.RelaxThreshold != 0 )  
 	{
 		value= ((BattData.RelaxThreshold << 9) / BattData.CurrentFactor);   /* LSB=8*5.88uV/Rsense */
 		value = value & 0x7f;
 		STC31xx_WriteByte8(STC311x_REG_CURRENT_THRES,value); 
 	}
 
-	/* set parameters if different from default, only if a restart is done (battery change) */
+	/* RAM restoration: set backup parameters if different from default, only if a restart is done (battery changed) */
 	if (GG_Ram.reg.CC_cnf !=0 ) STC31xx_WriteWord16(STC311x_REG_CC_CNF,GG_Ram.reg.CC_cnf); 
 	if (GG_Ram.reg.VM_cnf !=0 ) STC31xx_WriteWord16(STC311x_REG_VM_CNF,GG_Ram.reg.VM_cnf); 
 
 	STC31xx_WriteByte8(STC311x_REG_CTRL,0x03);  /*   clear PORDET, BATFAIL, free ALM pin, reset conv counter */
+
 	if (BattData.Vmode)
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x19);  /*   set GG_RUN=1, voltage mode, alm enabled */
 	else
@@ -600,7 +607,22 @@ static void STC311x_SetParam(void)
 }  
 
 
+/*******************************************************************************
+* Function Name  : STC31xx_SaveBackupData
+* Description    : Save Backup data to RAM for restoration process
+* Input          : None
+* Return         : -1 if error
+*******************************************************************************/
+int STC31xx_SaveBackupData(unsigned char * p_RamData)
+{
+	int status;
 
+	/* update the RAM crc32 */
+	UpdateRamCrc(p_RamData);
+
+	status = STC311x_WriteRamData(p_RamData);
+	return status;
+}
 
 /*******************************************************************************
 * Function Name  : STC311x_Startup
@@ -617,10 +639,10 @@ static int STC311x_Startup(void)
 	res = STC311x_GetStatusWord16();
 	if (res<0) return(res);
 
-	/* read OCV */
+	/* read initially measured OCV */
 	ocv=STC31xx_ReadWord16(STC311x_REG_OCV);
 
-	STC311x_SetParam();  /* set parameters  */
+	STC311x_SetInitialParam();  /* set parameters  */
 
 #ifdef STC3117
 	/* with STC3117, it is possible here to read the current and compensate OCV: */
@@ -648,20 +670,20 @@ static int STC311x_Restore(void)
 	int res;
 	int ocv;
 
-	/* check STC310x status */
+	/* check STC311x status */
 	res = STC311x_GetStatusWord16();
 	if (res<0) return(res);
 
 	/* read OCV */
 	ocv=STC31xx_ReadWord16(STC311x_REG_OCV);
 
-	STC311x_SetParam();  /* set parameters  */
+	STC311x_SetInitialParam();  /* set main parameters et restore RAM parameters */
 
-#if 1
-	/* if restore from unexpected reset, restore SOC (system dependent) */
+#ifdef OCV_RAM_BACKUP
+	/* if restore from unexpected reset, restore SOC from RAM backup (system dependent) */
 	if (GG_Ram.reg.GG_Status == GG_RUNNING)
 		if (GG_Ram.reg.SOC != 0)
-			STC31xx_WriteWord16(STC311x_REG_SOC,GG_Ram.reg.HRSOC);  /*   restore SOC */
+			STC31xx_WriteWord16(STC311x_REG_SOC, GG_Ram.reg.HRSOC);  /*   restore SOC */
 #else  
 	/* rewrite ocv to start SOC with updated OCV curve */
 	STC31xx_WriteWord16(STC311x_REG_OCV,ocv);
@@ -721,7 +743,7 @@ static void STC311x_SetSOC(int SOC)
 	STC31xx_WriteWord16(STC311x_REG_SOC,SOC);   
 }
 
-static void STC311x_ForceVM(void)
+static void STC311x_ForceVM(void) //Force Voltage Mode
 {
 	int value;
 
@@ -729,7 +751,7 @@ static void STC311x_ForceVM(void)
 	STC31xx_WriteByte8(STC311x_REG_MODE,value | STC311x_FORCE_VM);   /*   force VM mode */
 }
 
-static void STC311x_ForceCC(void)
+static void STC311x_ForceCC(void) //Force Coulomb Counter Mode (Mixed mode)
 {
 	int value;
 
@@ -739,7 +761,7 @@ static void STC311x_ForceCC(void)
 
 
 
-static int STC311x_SaveCnf(void)
+static int STC311x_SaveVMcnf_CCcnf(void)
 {
 	int reg_mode,value;
 
@@ -763,6 +785,7 @@ static int STC311x_SaveCnf(void)
 	else
 	{
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x18);  /*   set GG_RUN=1, mixed mode, alm enabled */
+
 		if (BattData.GG_Mode == CC_MODE)
 			STC31xx_WriteByte8(STC311x_REG_MODE,0x38);  /*   force CC mode */   
 		else
@@ -793,6 +816,7 @@ static int STC311x_SaveVMCnf(void)
 	else
 	{
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x18);  /*   set GG_RUN=1, mixed mode, alm enabled */
+
 		if (BattData.GG_Mode == CC_MODE)
 			STC31xx_WriteByte8(STC311x_REG_MODE,0x38);  /*   force CC mode */   
 		else
@@ -825,13 +849,13 @@ static int conv(short value, unsigned short factor)
 }
 
 /*******************************************************************************
-* Function Name  : STC311x_ReadBatteryData
+* Function Name  : STC311x_GetUpdatedBatteryData    //STC311x_ReadBatteryData
 * Description    :  utility function to read the battery data from STC311x
 *                  to be called every 5s or so
 * Input          : ref to BattData structure
 * Return         : error status (STC31XX_OK, !STC31XX_OK)
 *******************************************************************************/
-static int STC311x_ReadBatteryData(STC311x_BattDataTypeDef *BattData)
+static int STC311x_GetUpdatedBatteryData(STC311x_BattDataTypeDef *BattData)
 {
 	unsigned char data[16];
 	int res;
@@ -842,115 +866,144 @@ static int STC311x_ReadBatteryData(STC311x_BattDataTypeDef *BattData)
 
 	/* STC311x status */
 	BattData->STC_Status = res;
-	if (BattData->STC_Status & M_GGVM)
+	if (BattData->STC_Status & M_GGVM_MSK)
 		BattData->GG_Mode = VM_MODE;   /* VM active */
 	else 
 		BattData->GG_Mode = CC_MODE;   /* CC active */
 
+
+	/* read all registers of the device */
+
 #ifdef STC3115
 	/* read STC3115 registers 0 to 10 */
 	res=STC31xx_Read(11, 0, data);
+	if (res<0) return(res);  /* read failed */
 #endif  
 #ifdef STC3117
 	/* read STC3117 registers 0 to 14 */
 	res=STC31xx_Read(15, 0, data);
-#endif  
 	if (res<0) return(res);  /* read failed */
+#endif  
+
 
 	/* fill the battery status data */
-	/* SOC */
-	value=data[3]; value = (value<<8) + data[2];
-	BattData->HRSOC = value;     /* result in 1/512% */
+	{
+		/* SOC */
+		value=data[3]; value = (value<<8) + data[2];
+		BattData->HRSOC = value;     /* result in 1/512% */
 
-	/* conversion counter */
-	value=data[5]; value = (value<<8) + data[4];
-	BattData->ConvCounter = value;
+		/* conversion counter */
+		value=data[5]; value = (value<<8) + data[4];
+		BattData->ConvCounter = value;
 
-	/* current */
-	value=data[7]; value = (value<<8) + data[6];
-	value &= 0x3fff;   /* mask unused bits */
-	if (value>=0x2000) value -= 0x4000;  /* convert to signed value */
-	BattData->Current = conv(value, BattData->CurrentFactor);  /* result in mA */
+		/* current */
+		value=data[7]; value = (value<<8) + data[6];
+		value &= 0x3fff;   /* mask unused bits */
+		if (value>=0x2000) value -= 0x4000;  /* convert to signed value */
+		BattData->Current = conv(value, BattData->CurrentFactor);  /* result in mA */
 
-	/* voltage */
-	value=data[9]; value = (value<<8) + data[8];
-	value &= 0x0fff; /* mask unused bits */
-	if (value>=0x0800) value -= 0x1000;  /* convert to signed value */
-	value = conv(value,VoltageFactor);  /* result in mV */
-	BattData->Voltage = value;  /* result in mV */
+		/* voltage */
+		value=data[9]; value = (value<<8) + data[8];
+		value &= 0x0fff; /* mask unused bits */
+		if (value>=0x0800) value -= 0x1000;  /* convert to signed value */
+		value = conv(value,VoltageFactor);  /* result in mV */
+		BattData->Voltage = value;  /* result in mV */
 
-	/* temperature */
-	value=data[10]; 
-	if (value>=0x80) value -= 0x100;  /* convert to signed value */
-	BattData->Temperature = value*10;  /* result in 0.1°C */
+		/* temperature */
+		value=data[10]; 
+		if (value>=0x80) value -= 0x100;  /* convert to signed value */
+		BattData->Temperature = value*10;  /* result in 0.1°C */
 
 #ifdef STC3115
-	/* read STC3115 registers CC & VM adj low */
-	res=STC31xx_Read(2, STC311x_REG_CC_ADJ_LOW, data);
-	if (res<0) return(res);  /* read failed */
-	/* read STC3115 registers CC & VM adj high and OCV */
-	res=STC31xx_Read(4, STC311x_REG_CC_ADJ_HIGH, &data[2]);
-	if (res<0) return(res);  /* read failed */
-	// data 0: CC_ADJ_L, 1: VM_ADJ_L, 2: CC_ADJ_H, 3: VM_ADJ_H, 4-5: OCV
+		/* read STC3115 registers CC & VM adj low */
+		res=STC31xx_Read(2, STC311x_REG_CC_ADJ_LOW, data);
+		if (res<0) return(res);  /* read failed */
+		/* read STC3115 registers CC & VM adj high and OCV */
+		res=STC31xx_Read(4, STC311x_REG_CC_ADJ_HIGH, &data[2]);
+		if (res<0) return(res);  /* read failed */
+		// data 0: CC_ADJ_L, 1: VM_ADJ_L, 2: CC_ADJ_H, 3: VM_ADJ_H, 4-5: OCV
 
-	/* CC & VM adjustment counters */
-	value=data[2]; value = (value<<8) + data[0];
-	if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
-	BattData->CC_adj = value;//in 1/512%  
-	value=data[3]; value = (value<<8) + data[1];
-	if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
-	BattData->VM_adj = value;//in 1/512%  
+		/* CC & VM adjustment counters */
+		value=data[2]; value = (value<<8) + data[0];
+		if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
+		BattData->CC_adj = value;//in 1/512%  
+		value=data[3]; value = (value<<8) + data[1];
+		if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
+		BattData->VM_adj = value;//in 1/512%  
 
-	/* OCV */
-	value=data[5]; value = (value<<8) + data[4];
-	value &= 0x3fff; /* mask unused bits */
-	if (value>=0x02000) value -= 0x4000;  /* convert to signed value */
-	value = conv(value,VoltageFactor);  
-	value = (value+2) / 4;  /* divide by 4 with rounding */
-	BattData->OCV = value;  /* result in mV */
+		/* OCV */
+		value=data[5]; value = (value<<8) + data[4];
+		value &= 0x3fff; /* mask unused bits */
+		if (value>=0x02000) value -= 0x4000;  /* convert to signed value */
+		value = conv(value,VoltageFactor);  
+		value = (value+2) / 4;  /* divide by 4 with rounding */
+		BattData->OCV = value;  /* result in mV */
 #endif
 
 #ifdef STC3117
-	/* Avg current */
-	value=data[12]; value = (value<<8) + data[11];
-	if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
-	if (BattData->Vmode==0)
-	{
-		value = conv(value, BattData->CurrentFactor);
-		value = value / 4;  /* divide by 4  */
-	}
-	else
-	{
-		value = conv(value, BattData->CRateFactor);
-	}
-	BattData->AvgCurrent = value;  /* result in mA */
 
-	/* OCV */
-	value=data[14]; value = (value<<8) + data[13];
-	value &= 0x3fff; /* mask unused bits */
-	if (value>=0x02000) value -= 0x4000;  /* convert to signed value */
-	value = conv(value,VoltageFactor);  
-	value = (value+2) / 4;  /* divide by 4 with rounding */
-	BattData->OCV = value;  /* result in mV */
+		/* Avg current */
+		{
+			value=data[12]; 
+			value = (value<<8) + data[11];
+			if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
 
-	/* read STC3117 registers CC & VM adj */
-	res=STC31xx_Read(4, STC311x_REG_CC_ADJ, data);
-	if (res<0) return(res);  /* read failed */
+			if (BattData->Vmode==0) //mixed mode
+			{
+				value = conv(value, BattData->CurrentFactor);
+				value = value / 4;  /* divide by 4  */
+			}
+			else //voltage mode
+			{
+				value = conv(value, BattData->CRateFactor);
+			}
+			BattData->AvgCurrent = value;  /* result in mA */
+		}
 
-	/* CC & VM adjustment counters */
-	value=data[1]; value = (value<<8) + data[0];
-	if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
-	BattData->CC_adj = value; /* in 1/512% */
-	value=data[3]; value = (value<<8) + data[2];
-	if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
-	BattData->VM_adj = value; /* in 1/512% */
+		/* OCV */
+		{
+			value=data[14]; 
+			value = (value<<8) + data[13];
+			value &= 0x3fff; /* mask unused bits */
+			if (value>=0x02000) value -= 0x4000;  /* convert to signed value */
+
+			value = conv(value,VoltageFactor);  
+			value = (value+2) / 4;  /* divide by 4 with rounding */
+			BattData->OCV = value;  /* result in mV */
+		}
+
+		/* read STC3117 registers CC & VM adj */
+		{
+			/* CC adjustment counters */
+
+			res=STC31xx_Read(2, STC311x_REG_CC_ADJ, data);
+			if (res<0) return(res);  /* read failed */
+
+			value=data[1]; 
+			value = (value<<8) + data[0];
+			if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
+			BattData->CC_adj = value; /* in 1/512% */
+
+
+			/* VM adjustment counters */
+			res=STC31xx_Read(2, STC311x_REG_VM_ADJ, data);
+			if (res<0) return(res);  /* read failed */
+
+			value=data[1]; 
+			value = (value<<8) + data[0];
+			if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
+			BattData->VM_adj = value; /* in 1/512% */
+		}
 #endif
 
-	/* relax counter */
-	res=STC31xx_Read(1, STC311x_REG_CMONIT_COUNT, data);
-	if (res<0) return(res);  /* read failed */
-	BattData->RelaxTimer = data[0];
+		/* relax counter */
+		{
+			res=STC31xx_Read(1, STC311x_REG_CMONIT_COUNT, data);
+			if (res<0) return(res);  /* read failed */
+			BattData->RelaxTimer = data[0];
+		}
 
+	} //end fill the battery status data
 
 	return(STC31XX_OK);
 }
@@ -1037,35 +1090,37 @@ static int calcCRC8(unsigned char *data, int n)
 /*******************************************************************************
 * Function Name  : UpdateRamCrc
 * Description    : calculate the RAM CRC
-* Input          : none
+* Input          : pointer to Data 
 * Return         : CRC value
 *******************************************************************************/
-static int UpdateRamCrc(void)
+static int UpdateRamCrc(unsigned char * p_RamData)
 {
 	int res;
 
-	res=calcCRC8(GG_Ram.db,RAM_SIZE-1);
-	GG_Ram.db[RAM_SIZE-1] = res;   /* last byte holds the CRC */
+	res=calcCRC8(p_RamData, RAM_SIZE-1);
+	p_RamData[RAM_SIZE-1] = res;   /* last byte holds the CRC */
 	return(res);
 }
 
 /*******************************************************************************
-* Function Name  : Init_RAM
+* Function Name  : Init_Backup_RAM
 * Description    : Init the STC311x RAM registers with valid test word and CRC
 * Input          : none
 * Return         : none
 *******************************************************************************/
-static void Init_RAM(void)
+static void Init_Backup_RAM(void)
 {
 	int index;
 
 	for (index=0;index<RAM_SIZE;index++) 
 		GG_Ram.db[index]=0;
-	GG_Ram.reg.TstWord=RAM_TESTWORD;  /* id. to check RAM integrity */
+
+	GG_Ram.reg.TestWord = RAM_TESTWORD;  /* ID partern to check RAM integrity */
 	GG_Ram.reg.CC_cnf = BattData.CC_cnf;
 	GG_Ram.reg.VM_cnf = BattData.VM_cnf;
+
 	/* update the crc */
-	UpdateRamCrc();
+	UpdateRamCrc(GG_Ram.db);
 }
 
 
@@ -1077,9 +1132,10 @@ static int CompensateSOC(int value, int temp)
 	int r, v;
 
 	r=0;    
-#ifdef TEMPCOMP_SOC
+#ifdef TEMP_COMPENSATION_SOC
 	r=interpolate(temp/10,NTEMP,TempTable,BattData.CapacityDerating);  /* for APP_TYP_CURRENT */
-#endif       
+#endif
+
 	v = (long) (value-r) * MAX_SOC * 2 / (MAX_SOC-r);   /* compensate */
 	v = (v+1)/2;  /* rounding */
 	if (v < 0) v = 0;
@@ -1094,13 +1150,13 @@ static int CompensateSOC(int value, int temp)
 
 
 /*******************************************************************************
-* Function Name  : MM_FSM
-* Description    : process the Gas Gauge state machine in mixed mode
+* Function Name  : MixedMode_FSM_management    //MM_FSM
+* Description    : process the Gas Gauge state machine in mixed mode  (FSM = Finite-state machine)
 * Input          : BattData
 * Return         : 
 * Affect         : Global Gas Gauge data
 *******************************************************************************/
-static void MM_FSM(void)
+static void MixedMode_FSM_management(void)
 {
 
 	switch (BattData.BattState)
@@ -1109,6 +1165,7 @@ static void MM_FSM(void)
 		if (BattData.AvgCurrent < CHG_MIN_CURRENT)
 			BattData.BattState = BATT_ENDCHARG;        /* end of charge */
 		break;
+
 	case BATT_ENDCHARG:  /* end of charge state. check if fully charged or charge interrupted */
 		if ( BattData.Current > CHG_MIN_CURRENT ) 
 			BattData.BattState = BATT_CHARGING;
@@ -1117,6 +1174,7 @@ static void MM_FSM(void)
 		else if ( (BattData.Current > CHG_END_CURRENT ) && ( BattData.Voltage > BATT_CHG_VOLTAGE ) )
 			BattData.BattState = BATT_FULCHARG;  /* end of charge */
 		break;
+
 	case BATT_FULCHARG:  /* full charge state. wait for actual end of charge current */
 		if ( (BattData.Current > CHG_MIN_CURRENT)) 
 			BattData.BattState = BATT_CHARGING;  /* charge again */
@@ -1132,6 +1190,7 @@ static void MM_FSM(void)
 			BattData.BattState = BATT_IDLE;     /* end of charge cycle */
 		}
 		break;
+
 	case BATT_IDLE:  /* no charging, no discharging */
 		if (BattData.Current > CHG_END_CURRENT)
 		{
@@ -1140,17 +1199,20 @@ static void MM_FSM(void)
 		else if (BattData.Current < APP_MIN_CURRENT) 
 			BattData.BattState = BATT_DISCHARG; /* discharging again */
 		break;
+
 	case BATT_DISCHARG:
 		if (BattData.Current > APP_MIN_CURRENT) 
 			BattData.BattState = BATT_IDLE;
 		else if (BattData.AvgVoltage < BATT_MIN_VOLTAGE) 
 			BattData.BattState = BATT_LOWBATT;
 		break;
+
 	case BATT_LOWBATT:  /* battery nearly empty... */
 		if ( BattData.AvgVoltage > (BATT_MIN_VOLTAGE+50) )
 			BattData.BattState = BATT_IDLE;   /* idle */
 		else
 			break;
+
 	default:
 		BattData.BattState = BATT_IDLE;   /* idle */
 
@@ -1164,7 +1226,7 @@ static void CompensateVM(int temp)
 {
 	int r;
 
-#ifdef TEMPCOMP_SOC
+#ifdef TEMP_COMPENSATION_SOC
 	r=interpolate(temp/10,NTEMP,TempTable,BattData.VM_TempTable);
 	GG_Ram.reg.VM_cnf = (BattData.VM_cnf * r) / 100;
 	STC311x_SaveVMCnf();  /* save new VM cnf values to STC311x */
@@ -1173,13 +1235,13 @@ static void CompensateVM(int temp)
 
 
 /*******************************************************************************
-* Function Name  : VM_FSM
-* Description    : process the Gas Gauge machine in voltage mode
+* Function Name  : VM_FSM_management
+* Description    : process the Gas Gauge machine in voltage mode (FSM = Finite-state machine)
 * Input          : BattData
 * Return         : 
 * Affect         : Global Gas Gauge data
 *******************************************************************************/
-static void VM_FSM(void)
+static void VM_FSM_management(void)
 {
 
 #define DELTA_TEMP 30   /* 3 °C */
@@ -1217,7 +1279,7 @@ static void Reset_FSM_GG(void)
 
 #define OGx
 
-void SOC_correction (GasGauge_DataTypeDef *GG)
+void SOC_correction_process(GasGauge_DataTypeDef *GG)
 {
 	int Var1=0;
 	int Var2,Var3,Var4;
@@ -1273,6 +1335,7 @@ void SOC_correction (GasGauge_DataTypeDef *GG)
 	{
 		// rewrite SOCopt into STC311x
 		STC31xx_WriteWord16(STC311x_REG_SOC, SOCopt); 
+
 		// clear acc registers
 		STC311x_Reset_Adj();
 	}
@@ -1311,7 +1374,7 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 	BattData.Alm_Vbat = GG->Alm_Vbat; 
 	BattData.RelaxThreshold = GG->RelaxCurrent;
 
-	// BATD
+	// BATD ok
 	BattData.BattOnline = 1;
 
 	if (BattData.Rsense==0) BattData.Rsense=10;  /* default value in case, to avoid divide by 0 */
@@ -1321,10 +1384,11 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 #endif
 
 	if (BattData.CC_cnf==0) BattData.CC_cnf=395;  /* default values */
-	if (BattData.VM_cnf==0) BattData.VM_cnf=321;
+	if (BattData.VM_cnf==0) BattData.VM_cnf=321;  /* default values */
 
 	for (i=0;i<NTEMP;i++)
 		BattData.CapacityDerating[i] = GG->CapDerating[i]; 
+	
 	for (i=0;i<OCVTAB_SIZE;i++)
 	{
 #ifdef STC3115  
@@ -1335,6 +1399,7 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 		BattData.SoctabValue[i] = GG->SoctabValue[i]; 
 #endif
 	}	
+	
 	for (i=0;i<NTEMP;i++)
 		BattData.VM_TempTable[i] = DefVMTempTable[i];    
 
@@ -1349,20 +1414,20 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 	/* check RAM valid */
 	STC311x_ReadRamData(GG_Ram.db);
 
-	if ( (GG_Ram.reg.TstWord != RAM_TESTWORD) || (calcCRC8(GG_Ram.db,RAM_SIZE)!=0) )
+	if ( (GG_Ram.reg.TestWord != RAM_TESTWORD) || (calcCRC8(GG_Ram.db,RAM_SIZE) != 0) )
 	{
-		/* RAM invalid */
-		Init_RAM();
+		/* RAM invalid, so perform a totally new initialization */
+		Init_Backup_RAM();
 		res=STC311x_Startup();  /* return -1 if I2C error or STC3115 not present */
 	}
-	else
+	else 
 	{
 		/* check STC311x status */
-		if ((STC311x_GetStatusWord16() & M_RST) != 0 )
+		if ((STC311x_GetStatusWord16() & M_RST_ERR_MSK) != 0 ) //Alert condition has occured. Need to reset the Alerts.
 		{
 			res=STC311x_Startup();  /* return -1 if I2C error or STC3115 not present */
 		}
-		else
+		else //RAM backup content is valid, so use the restoration process to improve accuracy
 		{
 			res=STC311x_Restore(); /* recover from last SOC */
 		}
@@ -1370,9 +1435,7 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 
 
 	GG_Ram.reg.GG_Status = GG_INIT;
-	/* update the crc */
-	UpdateRamCrc();
-	STC311x_WriteRamData(GG_Ram.db);
+	STC31xx_SaveBackupData(GG_Ram.db);
 
 	Reset_FSM_GG();
 
@@ -1402,7 +1465,7 @@ continue
 *******************************************************************************/
 void GasGauge_Reset(void)  
 {
-	GG_Ram.reg.TstWord=0;  /* reset RAM */
+	GG_Ram.reg.TestWord=0;  /* reset RAM */
 	GG_Ram.reg.GG_Status = 0;
 	STC311x_WriteRamData(GG_Ram.db);
 
@@ -1423,9 +1486,8 @@ int GasGauge_Stop(void)
 
 	STC311x_ReadRamData(GG_Ram.db);
 	GG_Ram.reg.GG_Status= GG_POWERDN;
-	/* update the crc */
-	UpdateRamCrc();
-	STC311x_WriteRamData(GG_Ram.db);
+
+	STC31xx_SaveBackupData(GG_Ram.db);
 
 	res=STC311x_Powerdown();
 	if (res!=0) return (-1);  /* error */
@@ -1452,27 +1514,27 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 	BattData.Alm_Vbat = GG->Alm_Vbat; 
 	BattData.RelaxThreshold = GG->RelaxCurrent;
 
-	res=STC311x_ReadBatteryData(&BattData);  /* read battery data into global variables */
+	res=STC311x_GetUpdatedBatteryData(&BattData);  /* read battery data into global variables */
 	if (res!=0) return(-1); /* abort in case of I2C failure */
 
 	/* check if RAM data is ok (battery has not been changed) */
 	STC311x_ReadRamData(GG_Ram.db);
-	if ( (GG_Ram.reg.TstWord!= RAM_TESTWORD) || (calcCRC8(GG_Ram.db,RAM_SIZE)!=0) )
+	if ( (GG_Ram.reg.TestWord!= RAM_TESTWORD) || (calcCRC8(GG_Ram.db,RAM_SIZE)!=0) )
 	{
-		/* if RAM non ok, reset it and set init state */
-		Init_RAM(); 
+		/* if RAM not ok, reset it and set init state */
+		Init_Backup_RAM(); 
 		GG_Ram.reg.GG_Status = GG_INIT;
 	}    
 
 	//Check battery presence
-	if ((BattData.STC_Status & M_BATFAIL) != 0)
+	if ((BattData.STC_Status & M_BATFAIL_MSK) != 0)
 	{
-		BattData.BattOnline = 0; 
+		BattData.BattOnline = 0;  //battery not connected
 	}
-	/* check STC3115 status */
+
 #ifdef BATD_UC8
 	/* check STC3115 status */
-	if ((BattData.STC_Status & M_BATFAIL) != 0)
+	if ((BattData.STC_Status & M_BATFAIL_MSK) != 0)
 	{
 		/* BATD or UVLO detected */
 		if(BattData.ConvCounter > 0)
@@ -1488,7 +1550,7 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 	}
 #endif
 
-	if ((BattData.STC_Status & M_RUN) == 0)
+	if ((BattData.STC_Status & M_RUN_MSK) == 0)
 	{
 		/* if not running, restore STC3115 */
 		STC311x_Restore();  
@@ -1535,15 +1597,15 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		GG->RemTime = -1;   /* means no estimated time available */
 		GG->Temperature=250;
 	}
-	else
+	else //running OK
 	{
 		//Check battery presence
-		if ((BattData.STC_Status & M_BATFAIL) == 0)
+		if ((BattData.STC_Status & M_BATFAIL_MSK) == 0)
 		{
-			BattData.BattOnline = 1; 
+			BattData.BattOnline = 1;  //battery connected
 		}
 
-		SOC_correction (GG);
+		SOC_correction_process(GG);
 		/* SOC derating with temperature */
 		BattData.SOC = CompensateSOC(BattData.SOC,BattData.Temperature);
 
@@ -1570,12 +1632,14 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		BattData.AvgTemperature = (BattData.AccTemperature+AVGFILTER/2)/AVGFILTER;
 		BattData.AvgSOC = (BattData.AccSOC+AVGFILTER/2)/AVGFILTER;
 
+
+
 		/* ---------- process the Gas Gauge algorithm -------- */
 
 		if (BattData.Vmode) 
-			VM_FSM();  /* in voltage mode */
+			VM_FSM_management();  /* in voltage mode */
 		else
-			MM_FSM();  /* in mixed mode */
+			MixedMode_FSM_management();  /* MM_FSM :in mixed mode */
 
 		if (BattData.Vmode==0) 
 		{
@@ -1627,7 +1691,7 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		}
 		else 
 		{
-			GG->RemTime = -1;   /* means no estimated time available */
+			GG->RemTime = -1;   /* -1 means no estimated time available */
 			if (GG->AvgCurrent>CHG_END_CURRENT)
 				GG->State=BATT_CHARGING;
 			else
@@ -1635,14 +1699,15 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		}
 	}
 
-	/* save SOC */
-	GG_Ram.reg.HRSOC = BattData.HRSOC;
-	GG_Ram.reg.SOC = (GG->SOC+5)/10;    /* trace SOC in % */
-	UpdateRamCrc();
-	STC311x_WriteRamData(GG_Ram.db);
+	/* save periodically the last valid SOC in the embedded RAM */
+	{
+		GG_Ram.reg.HRSOC = BattData.HRSOC;
+		GG_Ram.reg.SOC = (GG->SOC+5)/10;    /* trace SOC in % */
+		STC31xx_SaveBackupData(GG_Ram.db);
+	}
 
 	if (GG_Ram.reg.GG_Status==GG_RUNNING)
-		return(1);
+		return(1); //OK
 	else
 		return(0);  /* only SOC, OCV and voltage are valid */
 }
@@ -1652,7 +1717,7 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 
 /*******************************************************************************
 * Function Name  : STC31xx_SetPowerSavingMode
-* Description    :  Set the power saving mode
+* Description    :  Set the power saving mode (i.e. in Voltage Mode only)
 * Input          : None
 * Return         : error status (STC31XX_OK, !STC31XX_OK)
 *******************************************************************************/
@@ -1673,7 +1738,7 @@ int STC31xx_SetPowerSavingMode(void)
 
 /*******************************************************************************
 * Function Name  : STC31xx_StopPowerSavingMode
-* Description    :  Stop the power saving mode
+* Description    :  Stop the power saving mode (i.e. go in Mixed Mode)
 * Input          : None
 * Return         : error status (STC31XX_OK, !STC31XX_OK)
 *******************************************************************************/
@@ -1839,12 +1904,12 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold)
 }
 
 /*******************************************************************************
-* Function Name  : STC31xx_ForceCC
+* Function Name  : STC31xx_ForceMixedMode
 * Description    :  Force the CC mode for CC eval
 * Input          : 
 * Return         : error status (STC31XX_OK, !STC31XX_OK)
 *******************************************************************************/
-int STC31xx_ForceCC(void)
+int STC31xx_ForceMixedMode(void)
 {
 	STC311x_ForceCC();
 
