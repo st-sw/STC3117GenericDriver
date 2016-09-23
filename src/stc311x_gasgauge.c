@@ -1,8 +1,8 @@
-/******************** (C) COPYRIGHT 2013 STMicroelectronics ********************
+/******************** (C) COPYRIGHT 2016 STMicroelectronics ********************
 * File Name          : stc311x_gasgauge.c
 * Author             : AMS application
-* Version            : V2.07
-* Date               : 2015/09/01
+* Version            : V2.08
+* Date               : 2016/09/01
 * Description        : gas gauge firmware for STC3117
 ********************************************************************************
 * THE PRESENT SOFTWARE WHICH IS FOR GUIDANCE ONLY AIMS AT PROVIDING CUSTOMERS
@@ -592,7 +592,7 @@ static void STC311x_SetInitialParam(void)
 		STC31xx_WriteByte8(STC311x_REG_CURRENT_THRES,value); 
 	}
 
-	/* RAM restoration: set backup parameters if different from default, only if a restart is done (battery changed) */
+	/* RAM restoration: set backup parameters if different from default, only if a restart is done (battery not changed) */
 	if (GG_Ram.reg.CC_cnf !=0 ) STC31xx_WriteWord16(STC311x_REG_CC_CNF,GG_Ram.reg.CC_cnf); 
 	if (GG_Ram.reg.VM_cnf !=0 ) STC31xx_WriteWord16(STC311x_REG_VM_CNF,GG_Ram.reg.VM_cnf); 
 
@@ -1922,4 +1922,4 @@ int STC31xx_ForceMixedMode(void)
 
 
 
-/******************* (C) COPYRIGHT 2013 STMicroelectronics *****END OF FILE****/
+/******************* (C) COPYRIGHT 2016 STMicroelectronics *****END OF FILE****/
