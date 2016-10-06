@@ -27,6 +27,10 @@ static void Delay_ms(unsigned int value);
 #define TIMER_LIMIT 0x5000 //arbitrary value to modify, and to wait 5s in normal use case
 #define SYSTEM_TIMER_AVAILABLE
 
+// Define the default battery OCV curve to be used for initialization:
+#define	DEFAULT_BATTERY_4V20_MAX      //Default OCV curve for a 4.20V max battery
+//#define	DEFAULT_BATTERY_4V35_MAX      //Default OCV curve for a 4.35V max battery
+
 int main(void)
 {
 	GasGauge_DataTypeDef STC3117_GG_struct;
@@ -202,40 +206,62 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->VM_cnf = 297;      /* nominal VM cnf */  //Warning: Battery dependant. Put the corresponding used value.
 
 
-	GG_struct->SoctabValue[15]=100*2;    /* SOC curve adjustment = 100%*/
-	GG_struct->SoctabValue[14]=90*2;    /* SOC curve adjustment = 90%*/
-	GG_struct->SoctabValue[13]=80*2;    /* SOC curve adjustment = 80%*/
-	GG_struct->SoctabValue[12]=70*2;    /* SOC curve adjustment = 70%*/
-	GG_struct->SoctabValue[11]=65*2;    /* SOC curve adjustment = 65%*/
-	GG_struct->SoctabValue[10]=60*2;    /* SOC curve adjustment = 60%*/
-	GG_struct->SoctabValue[9]=50*2;    /* SOC curve adjustment = 50%*/
-	GG_struct->SoctabValue[8]=40*2;    /* SOC curve adjustment = 40%*/
-	GG_struct->SoctabValue[7]=30*2;    /* SOC curve adjustment = 30%*/
-	GG_struct->SoctabValue[6]=25*2;    /* SOC curve adjustment = 25%*/
-	GG_struct->SoctabValue[5]=20*2;    /* SOC curve adjustment = 20%*/
-	GG_struct->SoctabValue[4]=15*2;    /* SOC curve adjustment = 15%*/
-	GG_struct->SoctabValue[3]=10*2;    /* SOC curve adjustment = 10%*/
-	GG_struct->SoctabValue[2]=6*2;    /* SOC curve adjustment = 6%*/
-	GG_struct->SoctabValue[1]=3*2;    /* SOC curve adjustment = 3%*/
-	GG_struct->SoctabValue[0]=0;    /* SOC curve adjustment = 0%*/
+	GG_struct->SoctabValue[0] = 0;    /* SOC curve adjustment = 0%*/
+	GG_struct->SoctabValue[1] = 3 * 2;    /* SOC curve adjustment = 3%*/
+	GG_struct->SoctabValue[2] = 6 * 2;    /* SOC curve adjustment = 6%*/
+	GG_struct->SoctabValue[3] = 10 * 2;    /* SOC curve adjustment = 10%*/
+	GG_struct->SoctabValue[4] = 15 * 2;    /* SOC curve adjustment = 15%*/
+	GG_struct->SoctabValue[5] = 20 * 2;    /* SOC curve adjustment = 20%*/
+	GG_struct->SoctabValue[6] = 25 * 2;    /* SOC curve adjustment = 25%*/
+	GG_struct->SoctabValue[7] = 30 * 2;    /* SOC curve adjustment = 30%*/
+	GG_struct->SoctabValue[8] = 40 * 2;    /* SOC curve adjustment = 40%*/
+	GG_struct->SoctabValue[9] = 50 * 2;    /* SOC curve adjustment = 50%*/
+	GG_struct->SoctabValue[10] = 60 * 2;    /* SOC curve adjustment = 60%*/
+	GG_struct->SoctabValue[11] = 65 * 2;    /* SOC curve adjustment = 65%*/
+	GG_struct->SoctabValue[12] = 70 * 2;    /* SOC curve adjustment = 70%*/
+	GG_struct->SoctabValue[13] = 80 * 2;    /* SOC curve adjustment = 80%*/
+	GG_struct->SoctabValue[14] = 90 * 2;    /* SOC curve adjustment = 90%*/
+	GG_struct->SoctabValue[15] = 100 * 2;    /* SOC curve adjustment = 100%*/
 
-	GG_struct->OcvValue[15]=0x1DA8;    /* OCV curve value at 100%*/
-	GG_struct->OcvValue[14]=0x1CF3;    /* OCV curve value at 90%*/
-	GG_struct->OcvValue[13]=0x1C59;    /* OCV curve value at 80%*/
-	GG_struct->OcvValue[12]=0x1BE7;    /* OCV curve value at 70%*/
-	GG_struct->OcvValue[11]=0x1BB1;    /* OCV curve value at 65%*/
-	GG_struct->OcvValue[10]=0x1B6F;    /* OCV curve value at 60%*/
-	GG_struct->OcvValue[9]=0x1B01;    /* OCV curve value at 50%*/
-	GG_struct->OcvValue[8]=0x1AD5;    /* OCV curve value at 40%*/
-	GG_struct->OcvValue[7]=0x1AB7;    /* OCV curve value at 30%*/
-	GG_struct->OcvValue[6]=0x1A9D;    /* OCV curve value at 25%*/
-	GG_struct->OcvValue[5]=0x1A6D;    /* OCV curve value at 20%*/
-	GG_struct->OcvValue[4]=0x1A3E;    /* OCV curve value at 15%*/
-	GG_struct->OcvValue[3]=0x19FA;    /* OCV curve value at 10%*/
-	GG_struct->OcvValue[2]=0x19B2;    /* OCV curve value at 6%*/
-	GG_struct->OcvValue[1]=0x1927;    /* OCV curve value at 3%*/
-	GG_struct->OcvValue[0]=0x1770;    /* OCV curve value at 0%*/
+#ifdef	DEFAULT_BATTERY_4V20_MAX      //Default OCV curve for a 4.20V max battery
+	GG_struct->OcvValue[0] = 0x1770;    /* OCV curve value at 0%*/
+	GG_struct->OcvValue[1] = 0x1926;    /* OCV curve value at 3%*/
+	GG_struct->OcvValue[2] = 0x19B2;    /* OCV curve value at 6%*/
+	GG_struct->OcvValue[3] = 0x19FB;    /* OCV curve value at 10%*/
+	GG_struct->OcvValue[4] = 0x1A3E;    /* OCV curve value at 15%*/
+	GG_struct->OcvValue[5] = 0x1A6D;    /* OCV curve value at 20%*/
+	GG_struct->OcvValue[6] = 0x1A9D;    /* OCV curve value at 25%*/
+	GG_struct->OcvValue[7] = 0x1AB6;    /* OCV curve value at 30%*/
+	GG_struct->OcvValue[8] = 0x1AD5;    /* OCV curve value at 40%*/
+	GG_struct->OcvValue[9] = 0x1B01;    /* OCV curve value at 50%*/
+	GG_struct->OcvValue[10] = 0x1B70;    /* OCV curve value at 60%*/
+	GG_struct->OcvValue[11] = 0x1BB1;    /* OCV curve value at 65%*/
+	GG_struct->OcvValue[12] = 0x1BE8;    /* OCV curve value at 70%*/
+	GG_struct->OcvValue[13] = 0x1C58;    /* OCV curve value at 80%*/
+	GG_struct->OcvValue[14] = 0x1CF3;    /* OCV curve value at 90%*/
+	GG_struct->OcvValue[15] = 0x1DA9;    /* OCV curve value at 100%*/
+#endif
 
+#ifdef	DEFAULT_BATTERY_4V35_MAX      //Default OCV curve for a 4.35V max battery
+	GG_struct->OcvValue[0] = 0x1770;    /* OCV curve value at 0%*/
+	GG_struct->OcvValue[1] = 0x195D;    /* OCV curve value at 3%*/
+	GG_struct->OcvValue[2] = 0x19EE;    /* OCV curve value at 6%*/
+	GG_struct->OcvValue[3] = 0x1A1A;    /* OCV curve value at 10%*/
+	GG_struct->OcvValue[4] = 0x1A59;    /* OCV curve value at 15%*/
+	GG_struct->OcvValue[5] = 0x1A95;    /* OCV curve value at 20%*/
+	GG_struct->OcvValue[6] = 0x1AB6;    /* OCV curve value at 25%*/
+	GG_struct->OcvValue[7] = 0x1AC7;    /* OCV curve value at 30%*/
+	GG_struct->OcvValue[8] = 0x1AEB;    /* OCV curve value at 40%*/
+	GG_struct->OcvValue[9] = 0x1B2B;    /* OCV curve value at 50%*/
+	GG_struct->OcvValue[10] = 0x1BCC;    /* OCV curve value at 60%*/
+	GG_struct->OcvValue[11] = 0x1C13;    /* OCV curve value at 65%*/
+	GG_struct->OcvValue[12] = 0x1C57;    /* OCV curve value at 70%*/
+	GG_struct->OcvValue[13] = 0x1D09;    /* OCV curve value at 80%*/
+	GG_struct->OcvValue[14] = 0x1DCF;    /* OCV curve value at 90%*/
+	GG_struct->OcvValue[15] = 0x1EA2;    /* OCV curve value at 100%*/
+#endif
+	
+	
 	GG_struct->CapDerating[6]=0;   /* capacity derating in 0.1%, for temp = -20 °C */
 	GG_struct->CapDerating[5]=0;   /* capacity derating in 0.1%, for temp = -10 °C */
 	GG_struct->CapDerating[4]=0;   /* capacity derating in 0.1%, for temp = 0   °C */
