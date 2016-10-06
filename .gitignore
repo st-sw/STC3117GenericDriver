@@ -1,2 +1,5 @@
 Test_project/VisualStudio/STC3117_test/Debug/
 *.tlog
+*.db
+*.opendb
+*.idb
