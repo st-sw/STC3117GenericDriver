@@ -467,6 +467,11 @@ static int STC31xx_WriteWord16(int RegAddress, int Value)
 
 /* -------------------------------------------------------------------------- */
 
+static int UpdateRamCrc(unsigned char * p_RamData);
+static int STC311x_WriteRamData(unsigned char *RamData);
+
+/* -------------------------------------------------------------------------- */
+
 /* #define CurrentFactor  (24084/SENSERESISTOR)         LSB=5.88uV/R= ~24084/R/4096 - convert to mA  */
 #define VoltageFactor  9011                          /* LSB=2.20mV ~9011/4096 - convert to mV         */
 
