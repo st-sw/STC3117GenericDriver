@@ -177,10 +177,6 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 #define CC_MODE 0  // Mixed mode
 #define VM_MODE 1  // Voltage mode
 
-#define MIXED_MODE 0  // Mixed mode
-#define VLTG_MODE 1  // Voltage mode
-
-
 
 /* gas gauge structure definition ------------------------------------*/
 

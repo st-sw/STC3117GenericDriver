@@ -19,6 +19,7 @@
 
 #include "stc311x_gasgauge.h"
 #include <stdio.h>
+#include "stc311x_BatteryInfo.h"
 
 static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct);
 static int GasGaugeTimerFinished(void);
@@ -26,10 +27,6 @@ static void Delay_ms(unsigned int value);
 
 #define TIMER_LIMIT 0x5000 //arbitrary value to modify, and to wait 5s in normal use case
 #define SYSTEM_TIMER_AVAILABLE
-
-// Define the default battery OCV curve to be used for initialization:
-#define	DEFAULT_BATTERY_4V20_MAX      //Default OCV curve for a 4.20V max battery
-//#define	DEFAULT_BATTERY_4V35_MAX      //Default OCV curve for a 4.35V max battery
 
 int main(void)
 {
@@ -140,7 +137,7 @@ GasGauge_Restart:
 	}
 
 
-	while(BatteryMonitoringEnabled == 1) //main infinite loop
+	while(BatteryMonitoringEnabled) //main infinite loop
 	{
 		if(HardwareShutDown == 1) //var modified from IRQ routine
 		{
@@ -199,14 +196,21 @@ GasGauge_Restart:
 
 static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 {
+	int Rint;
+
+
 	//structure initialisation
 
-	GG_struct->Cnom = 1450;        /* nominal capacity in mAh */  //Warning: Battery dependant. Put the corresponding used value.
-	GG_struct->CC_cnf = 293;      /* nominal CC_cnf */  //Warning: Battery dependant. Put the corresponding used value.
-	GG_struct->VM_cnf = 297;      /* nominal VM cnf */  //Warning: Battery dependant. Put the corresponding used value.
+	GG_struct->Cnom = BATT_CAPACITY;        /* nominal Battery capacity in mAh */  //Warning: Battery dependant. Put the corresponding used value.
+	
+	Rint = BATT_RINT;
+	if (Rint == 0)  Rint = 200; //force default
+
+	GG_struct->VM_cnf = (int) ((Rint * BATT_CAPACITY) / 977.78);       /* nominal VM cnf */
+	GG_struct->CC_cnf = (int) ((RSENSE * BATT_CAPACITY) / 49.556);     /* nominal CC_cnf, for CC mode only */
 
 
-	GG_struct->SoctabValue[0] = 0;    /* SOC curve adjustment = 0%*/
+	GG_struct->SoctabValue[0] = 0;        /* SOC curve adjustment = 0%*/
 	GG_struct->SoctabValue[1] = 3 * 2;    /* SOC curve adjustment = 3%*/
 	GG_struct->SoctabValue[2] = 6 * 2;    /* SOC curve adjustment = 6%*/
 	GG_struct->SoctabValue[3] = 10 * 2;    /* SOC curve adjustment = 10%*/
@@ -222,6 +226,7 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->SoctabValue[13] = 80 * 2;    /* SOC curve adjustment = 80%*/
 	GG_struct->SoctabValue[14] = 90 * 2;    /* SOC curve adjustment = 90%*/
 	GG_struct->SoctabValue[15] = 100 * 2;    /* SOC curve adjustment = 100%*/
+
 
 #ifdef	DEFAULT_BATTERY_4V20_MAX      //Default OCV curve for a 4.20V max battery
 	GG_struct->OcvValue[0] = 0x1770;    /* OCV curve value at 0%*/
@@ -260,8 +265,14 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->OcvValue[14] = 0x1DCF;    /* OCV curve value at 90%*/
 	GG_struct->OcvValue[15] = 0x1EA2;    /* OCV curve value at 100%*/
 #endif
-	
-	
+
+#ifdef	CUSTOM_BATTERY_OCV   //fill custom battery data
+	GG_struct->OcvValue[0] = ...;
+	GG_struct->OcvValue[1] = ...;
+	//...
+	//...
+#endif
+
 	GG_struct->CapDerating[6]=0;   /* capacity derating in 0.1%, for temp = -20 °C */
 	GG_struct->CapDerating[5]=0;   /* capacity derating in 0.1%, for temp = -10 °C */
 	GG_struct->CapDerating[4]=0;   /* capacity derating in 0.1%, for temp = 0   °C */
@@ -271,13 +282,13 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->CapDerating[0]=0;   /* capacity derating in 0.1%, for temp = 60  °C */
 
 
-	GG_struct->Vmode = 0;       /* 1=Voltage mode, 0=mixed mode */
+	GG_struct->Vmode = MIXED_MODE;       /* 1=Voltage mode, 0=mixed mode */
 
 	GG_struct->Alm_SOC = 10;     /* SOC alm level % */
 	GG_struct->Alm_Vbat = 3600;    /* Vbat alm level mV */
 
 
-	GG_struct->Rsense = 10;      /* sense resistor mOhms */   //Warning: Hardware dependant. Put the corresponding used value
+	GG_struct->Rsense = RSENSE;      /* sense resistor mOhms */   //Warning: Hardware dependant. Put the corresponding used value
 	GG_struct->RelaxCurrent = GG_struct->Cnom/20;  /* current for relaxation (< C/20) mA */
 
 	GG_struct->ForceExternalTemperature = 0; //do not force Temperature but Gas gauge measures it

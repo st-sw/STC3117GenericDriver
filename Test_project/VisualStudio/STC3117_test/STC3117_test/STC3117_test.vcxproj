@@ -83,6 +83,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\..\src\Generic_I2C.h" />
+    <ClInclude Include="..\..\..\..\src\stc311x_BatteryInfo.h" />
     <ClInclude Include="..\..\..\..\src\stc311x_gasgauge.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

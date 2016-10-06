@@ -32,6 +32,9 @@ extern "C"              //c++
 //C++ modification #include "i2c.h"
 
 /* Exported constants --------------------------------------------------------*/
+#define MIXED_MODE 0  // Mixed mode
+#define VLTG_MODE 1   // Voltage mode
+
 /* Exported macro ------------------------------------------------------------*/
 /* Exported define -----------------------------------------------------------*/
 

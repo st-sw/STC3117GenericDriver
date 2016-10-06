@@ -27,11 +27,19 @@
 /*   TO BE ADJUSTED ACCORDING TO BATTERY/APPLICATION CHARACTERISTICS                */
 /* -------------------------------------------------------------------------------- */
 /*                                                                                  */
+
+/*Battery parameters define  ------------------------------------------------------ */
+#define BATT_CAPACITY		1650	/* battery nominal capacity in mAh					*/
+#define BATT_RINT			200		/* Internal battery impedance in mOhms, 0 if unknown	*/
+
+/*Application parameters define  -------------------------------------------------- */
+#define RSENSE				10		/* current sensing resistor (soldered on the board) in mOhms */
+
 #define BATT_CHG_VOLTAGE   4250   /* min voltage at the end of the charge (mV)      */
 #define BATT_MIN_VOLTAGE   3300   /* nearly empty battery detection level (mV)      */
 #define MAX_HRSOC          51200  /* HRSOC (Higher Resolution SOC): 100% in 1/512% units */
 #define MAX_SOC            1000   /* 100% in 0.1% units */
-/*                                                                                  */
+
 #define CHG_MIN_CURRENT     150   /* min charge current in mA                       */
 #define CHG_END_CURRENT      20   /* end charge current in mA                       */
 #define APP_MIN_CURRENT     (-5)  /* minimum application current consumption in mA ( <0 !) */
@@ -41,6 +49,12 @@
 #define VMTEMPTABLE        { 85, 90, 100, 160, 320, 440, 840 }  /* normalized VM_CNF at 60, 40, 25, 10, 0, -10°C, -20°C */
 
 #define AVGFILTER           4  /* average filter constant */
+
+
+/* Define the default battery OCV curve to be used for initialization:  */
+#define DEFAULT_BATTERY_4V20_MAX      //Default OCV curve for a 4.20V max battery
+//#define DEFAULT_BATTERY_4V35_MAX      //Default OCV curve for a 4.35V max battery
+//#define CUSTOM_BATTERY_OCV          //OCV curve determined from battery manufacturer data, or battery characterization statistics.
 
 /* ******************************************************************************** */
 
