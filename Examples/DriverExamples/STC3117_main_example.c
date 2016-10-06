@@ -150,7 +150,7 @@ GasGauge_Restart:
 		}
 		else //normal case
 		{
-			if(GasGaugeTimerFinished() == 1) //Process task every 5s
+			if(GasGaugeTimerFinished() == 1) //Process task every 5s (or every 1s to 30s)
 			{
 				//Call task function	
 				status = GasGauge_Task(&STC3117_GG_struct);  /* process gas gauge algorithm, returns results */
