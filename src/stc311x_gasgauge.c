@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "stc311x_gasgauge.h" 
 #include "Generic_I2C.h"
+#include "stc311x_BatteryInfo.h"
 
 /*Function declaration*/
 int STC31xx_SetPowerSavingMode(void);
@@ -56,29 +57,6 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 #define OCV_RAM_BACKUP
 
 //#define BATD_UC8 //Optional: basic reset of the gas gauge in case of error event occurs (BATD or UVLO)
-
-/* ******************************************************************************** */
-
-
-/* ******************************************************************************** */
-/*        INTERNAL PARAMETERS                                                       */
-/*   TO BE ADJUSTED ACCORDING TO BATTERY/APPLICATION CHARACTERISTICS                */
-/* -------------------------------------------------------------------------------- */
-/*                                                                                  */
-#define BATT_CHG_VOLTAGE   4250   /* min voltage at the end of the charge (mV)      */
-#define BATT_MIN_VOLTAGE   3300   /* nearly empty battery detection level (mV)      */
-#define MAX_HRSOC          51200  /* HRSOC (Higher Resolution SOC): 100% in 1/512% units */
-#define MAX_SOC            1000   /* 100% in 0.1% units */
-/*                                                                                  */
-#define CHG_MIN_CURRENT     150   /* min charge current in mA                       */
-#define CHG_END_CURRENT      20   /* end charge current in mA                       */
-#define APP_MIN_CURRENT     (-5)  /* minimum application current consumption in mA ( <0 !) */
-#define APP_MIN_VOLTAGE	    3000  /* application cut-off voltage                    */
-#define TEMP_MIN_ADJ	    (-5)  /* minimum temperature for gain adjustment */
-
-#define VMTEMPTABLE        { 85, 90, 100, 160, 320, 440, 840 }  /* normalized VM_CNF at 60, 40, 25, 10, 0, -10°C, -20°C */
-
-#define AVGFILTER           4  /* average filter constant */
 
 /* ******************************************************************************** */
 
