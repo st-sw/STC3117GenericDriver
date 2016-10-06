@@ -196,8 +196,11 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 #define GG_RUNNING  'R'
 #define GG_POWERDN  'D'
 
-#define VM_MODE 1  // Voltage mode
 #define CC_MODE 0  // Mixed mode
+#define VM_MODE 1  // Voltage mode
+
+#define MIXED_MODE 0  // Mixed mode
+#define VLTG_MODE 1  // Voltage mode
 
 
 
@@ -607,7 +610,7 @@ static void STC311x_SetInitialParamAndRun(void)
 	STC31xx_WriteByte8(STC311x_REG_CTRL,0x03);  /*   clear PORDET, BATFAIL, free ALM pin, reset conv counter */
 
 	/* Run the device (i.e. Start the battery monitoring) */
-	if (BattData.Vmode)
+	if (BattData.Vmode == VLTG_MODE)
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x19);  /*   set GG_RUN=1, voltage mode, alm enabled */
 	else
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x18);  /*   set GG_RUN=1, mixed mode, alm enabled */
@@ -787,7 +790,7 @@ static int STC311x_SaveVMcnf_CCcnf(void)
 	STC31xx_WriteWord16(STC311x_REG_SOC,value); 
 	STC31xx_WriteWord16(STC311x_REG_CC_CNF,GG_Ram.reg.CC_cnf); 
 
-	if (BattData.Vmode)
+	if (BattData.Vmode == VLTG_MODE)
 	{
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x19);  /*   set GG_RUN=1, voltage mode, alm enabled */
 	}
@@ -818,7 +821,7 @@ static int STC311x_SaveVMCnf(void)
 
 	STC31xx_WriteWord16(STC311x_REG_VM_CNF,GG_Ram.reg.VM_cnf); 
 
-	if (BattData.Vmode)
+	if (BattData.Vmode == VLTG_MODE)
 	{
 		STC31xx_WriteByte8(STC311x_REG_MODE,0x19);  /*   set GG_RUN=1, voltage mode, alm enabled */
 	}
@@ -960,7 +963,7 @@ static int STC311x_GetUpdatedBatteryData(STC311x_BattDataTypeDef *BattData)
 			value = (value<<8) + data[11];
 			if (value>=0x8000) value -= 0x10000;  /* convert to signed value */
 
-			if (BattData->Vmode==0) //mixed mode
+			if (BattData->Vmode == MIXED_MODE) //mixed mode
 			{
 				value = conv(value, BattData->CurrentFactor);
 				value = value / 4;  /* divide by 4  */
@@ -1294,7 +1297,7 @@ void SOC_correction_process(GasGauge_DataTypeDef *GG)
 {
 	int Var1=0;
 	int Var2,Var3,Var4;
-	int SOCoptimum;
+	int SOCoptim;
 
 #ifdef OGx
 
@@ -1320,9 +1323,9 @@ void SOC_correction_process(GasGauge_DataTypeDef *GG)
 
 	Var4=BattData.CC_adj-BattData.VM_adj;
 	if (BattData.GG_Mode == CC_MODE)  
-		SOCoptimum = BattData.HRSOC - BattData.CC_adj + Var1      * Var4 / 64;
+		SOCoptim = BattData.HRSOC - BattData.CC_adj + Var1      * Var4 / 64;
 	else
-		SOCoptimum = BattData.HRSOC - BattData.VM_adj - (64-Var1) * Var4 / 64;
+		SOCoptim = BattData.HRSOC - BattData.VM_adj - (64-Var1) * Var4 / 64;
 
 	Var2 = BattData.Nropt;
 	if ( (BattData.AvgCurrent < -CURRENT_TH) || (BattData.AvgCurrent > CURRENT_TH) ) 
@@ -1336,16 +1339,16 @@ void SOC_correction_process(GasGauge_DataTypeDef *GG)
 	else
 		GG->Ropt = 0;  // not available
 
-	if (SOCoptimum <= 0 )
-		SOCoptimum = 0;
-	if (SOCoptimum >= MAX_HRSOC)
-		SOCoptimum = MAX_HRSOC;
+	if (SOCoptim <= 0 )
+		SOCoptim = 0;
+	if (SOCoptim >= MAX_HRSOC)
+		SOCoptim = MAX_HRSOC;
 	
-	BattData.SOC = (SOCoptimum*10+256)/512;
+	BattData.SOC = (SOCoptim*10+256)/512;
 	if ( (Var4<(-VAR4MAX)) || (Var4>=VAR4MAX) )
 	{
-		// overwrite SOCoptimum into STC311x
-		STC31xx_WriteWord16(STC311x_REG_SOC, SOCoptimum); 
+		// overwrite SOCoptim into STC311x
+		STC31xx_WriteWord16(STC311x_REG_SOC, SOCoptim); 
 
 		// clear acc registers
 		STC311x_Reset_Adj();
@@ -1648,12 +1651,12 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 
 		/* ---------- process the Gas Gauge algorithm -------- */
 
-		if (BattData.Vmode == 1) 
+		if (BattData.Vmode == VLTG_MODE)
 			VM_FSM_management();  /* in Voltage mode */
 		else
 			MixedMode_FSM_management();  /* MM_FSM :in Mixed mode */
 
-		if (BattData.Vmode == 0) 
+		if (BattData.Vmode == MIXED_MODE)
 		{
 			// Lately fully compensation
 			if(BattData.AvgCurrent > 0 && BattData.SOC >= 990 && BattData.SOC < 995 && BattData.AvgCurrent > 100)
@@ -1685,14 +1688,15 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		GG->AvgTemperature = BattData.AvgTemperature;
 		GG->AvgSOC = BattData.AvgSOC;
 
-		if (BattData.Vmode) 
+#ifdef STC3115
+		if (BattData.Vmode == VLTG_MODE) 
 		{
 			/* no current value in voltage mode */
-#ifdef STC3115
+
 			GG->Current = 0;
 			GG->AvgCurrent = 0;
-#endif
 		}
+#endif
 
 		GG->ChargeValue = (long) BattData.Cnom * BattData.AvgSOC / MAX_SOC;
 		if (GG->AvgCurrent<APP_MIN_CURRENT)
