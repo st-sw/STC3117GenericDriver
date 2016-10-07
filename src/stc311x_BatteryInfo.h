@@ -56,6 +56,8 @@
 //#define DEFAULT_BATTERY_4V35_MAX      //Default OCV curve for a 4.35V max battery
 //#define CUSTOM_BATTERY_OCV          //OCV curve determined from battery manufacturer data, or battery characterization statistics.
 
+#define MONITORING_MODE   MIXED_MODE  /* 1=Voltage mode, 0=mixed mode */
+
 /* ******************************************************************************** */
 
 

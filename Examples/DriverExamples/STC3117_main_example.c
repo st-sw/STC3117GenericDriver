@@ -203,11 +203,19 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 
 	GG_struct->Cnom = BATT_CAPACITY;        /* nominal Battery capacity in mAh */  //Warning: Battery dependant. Put the corresponding used value.
 	
+	GG_struct->Vmode = MONITORING_MODE;       /* 1=Voltage mode, 0=mixed mode */
+	
+
 	Rint = BATT_RINT;
 	if (Rint == 0)  Rint = 200; //force default
 
 	GG_struct->VM_cnf = (int) ((Rint * BATT_CAPACITY) / 977.78);       /* nominal VM cnf */
-	GG_struct->CC_cnf = (int) ((RSENSE * BATT_CAPACITY) / 49.556);     /* nominal CC_cnf, for CC mode only */
+
+
+	if (MONITORING_MODE == MIXED_MODE)
+	{
+		GG_struct->CC_cnf = (int)((RSENSE * BATT_CAPACITY) / 49.556);     /* nominal CC_cnf, for CC mode only */
+	}
 
 
 	GG_struct->SoctabValue[0] = 0;        /* SOC curve adjustment = 0%*/
@@ -282,7 +290,7 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->CapDerating[0]=0;   /* capacity derating in 0.1%, for temp = 60  °C */
 
 
-	GG_struct->Vmode = MIXED_MODE;       /* 1=Voltage mode, 0=mixed mode */
+	
 
 	GG_struct->Alm_SOC = 10;     /* SOC alm level % */
 	GG_struct->Alm_Vbat = 3600;    /* Vbat alm level mV */
