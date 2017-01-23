@@ -3,3 +3,4 @@ Test_project/VisualStudio/STC3117_test/Debug/
 *.db
 *.opendb
 *.idb
+*.log

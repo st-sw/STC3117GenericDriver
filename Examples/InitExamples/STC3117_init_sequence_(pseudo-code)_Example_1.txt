@@ -1,0 +1,65 @@
+#===============================================
+# STC3117 Gas Gauge
+# STMicroelectronics
+#===============================================
+# Example of initialization 
+# Customize it depending on your configuration
+#===============================================
+# Syntax:
+# I2C_Read  @ADDRESS
+# I2C_Write @ADDRESS DATA
+#===============================================
+# Description: 
+# This is a basic startup example. 
+# There is no battery parameters taken into account.
+# It can be used mainly to test the hardware connections with the Gas gauge IC. 
+# It always starts in the same initial conditions (using the software reset), 
+# so you can quickly restart the software without having to disconnect / reconnect the battery for each tests.
+#
+# -> Using Software-Reset but no Battery Parameters (for quick tests & debug mode)
+#===============================================
+
+
+# Check I2C is working & Device ID is correct (value must be equal to 0x16 for STC3117)
+I2C_Read @0x18
+
+# Clear the Power-On Reset (POR) detection bit, and release the software-reset   (default value at init: 0x15)
+I2C_Write @0x01 0x05
+
+# Perform a software-reset (to always start initialization in the same conditions)
+I2C_Write @0x01 0x10
+
+
+# Wait the Device is ready (i.e. wait it finished the initial measurements)
+# Status is checked by waiting REG_COUNTER value is 3 or more, or by waiting 1.5s after reset.
+
+loop while VALUE < 3
+{
+	#read REG_COUNTER
+	I2C_Read @0x04 & @0x05    #(2 byte length)
+}
+
+# Start the device monitoring: Set GG_RUN bit to 1
+# (for instance set register value to 0x19)
+I2C_Write @0x00 0x19
+
+# To check the device is running, you can read the REG_COUNTER and verify it increments continuously.
+I2C_Read @0x04 & @0x05    #(2 byte length)
+
+# Wait 500ms to check next increment
+I2C_Read @0x04 & @0x05    #(2 byte length)
+
+
+# Now read periodically (every 5s) the available monitoring values: Battery Voltage (REG_VOLTAGE) and Device Temperature (REG_TEMPERATURE)
+
+loop periodically
+{
+	#read REG_VOLTAGE
+	I2C_Read @0x08 & @0x09    #(2 byte length)
+	
+	#read REG_TEMPERATURE
+	I2C_Read @0x0A    #(1 byte length)
+}
+
+
+# Note: At this stage, reading the REG_SOC register won't be accurate as the device is not fully configured with battery information (it uses default device parameters)

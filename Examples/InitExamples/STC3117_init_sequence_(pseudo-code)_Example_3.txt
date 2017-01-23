@@ -1,0 +1,125 @@
+#===============================================
+# STC3117 Gas Gauge
+# STMicroelectronics
+#===============================================
+# Example of initialization 
+# Customize it depending on your configuration
+#===============================================
+# Syntax:
+# I2C_Read  @ADDRESS
+# I2C_Write @ADDRESS DATA
+#===============================================
+# Description: 
+# This example corresponds to the standard use-case for the Gas gauge. 
+# It configures the gas gauge registers with the battery characteristics, and never uses the software-reset.
+#
+# -> Recommended product use-case
+#===============================================
+
+# Connect a battery
+# or
+# Wait the current battery is relaxed (30s or more) after a charge or discharge. This is required for an accurate initial measurement
+
+# Check I2C is working & Device ID is correct (value must be equal to 0x16 for STC3117)
+I2C_Read @0x18
+
+# [Optional]: Stop the device: Set GG_RUN to 0 if Device already running   (default value at init: 0x09)
+I2C_Write @0x00 0x09
+
+# Note: Do not perform a software-reset to avoid losing the initial measurements.
+
+
+# Read and store previous REG_OCV (to memorise the last used value of the current connected battery, and improve re-init accuracy)
+MYDATA1 <- I2C_Read @0x0D & @0x0E    #(2 byte length)
+
+
+# [Optional]: Clear the Power-On Reset (POR) detection bit, and release the software-reset   (default value at init: 0x15)
+I2C_Write @0x01 0x05
+
+
+# [Optional]: Wait the Device is ready (i.e. wait it finished the initial measurements)
+# Status is checked by waiting REG_COUNTER value is >= 3, or by waiting 1.5s
+
+loop while VALUE < 3
+{
+	#read REG_COUNTER
+	I2C_Read @0x04 & @0x05    #(2 byte length)
+}
+
+
+
+# Write REG_OCVTAB (set the values depending on the battery characteristics). (Below are the default values)
+I2C_Write @0x30 0x1770    #(2 byte length)
+I2C_Write @0x32 0x1926    #(2 byte length)
+I2C_Write @0x34 0x19B2    #(2 byte length)
+I2C_Write @0x36 0x19FB    #(2 byte length)
+I2C_Write @0x38 0x1A3E    #(2 byte length)
+I2C_Write @0x3A 0x1A6D    #(2 byte length)
+I2C_Write @0x3C 0x1A9D    #(2 byte length)
+I2C_Write @0x3E 0x1AB6    #(2 byte length)
+I2C_Write @0x40 0x1AD5    #(2 byte length)
+I2C_Write @0x42 0x1B01    #(2 byte length)
+I2C_Write @0x44 0x1B70    #(2 byte length)
+I2C_Write @0x46 0x1BB1    #(2 byte length)
+I2C_Write @0x48 0x1BE8    #(2 byte length)
+I2C_Write @0x4A 0x1C58    #(2 byte length)
+I2C_Write @0x4C 0x1CF3    #(2 byte length)
+I2C_Write @0x4E 0x1DA9    #(2 byte length)
+
+
+# Write REG_SOCTAB (Below are the default values)
+I2C_Write @0x50 0x00
+I2C_Write @0x51 0x06
+I2C_Write @0x52 0x0C
+I2C_Write @0x53 0x14
+I2C_Write @0x54 0x1E
+I2C_Write @0x55 0x28
+I2C_Write @0x56 0x32
+I2C_Write @0x57 0x3C
+I2C_Write @0x58 0x50
+I2C_Write @0x59 0x64
+I2C_Write @0x5A 0x78
+I2C_Write @0x5B 0x82
+I2C_Write @0x5C 0x8C
+I2C_Write @0x5D 0xA0
+I2C_Write @0x5E 0xB4
+I2C_Write @0x5F 0xC8
+
+# Compute VM_CNF = R_internal_battery x C_nom_battery / 977.78
+# Write REG_VM_CNF (Voltage Mode Configuration)
+I2C_Write @0x11 0x21
+I2C_Write @0x12 0x03
+
+# Compute CC_CNF = R_sense_external x C_nom_battery / 49.556
+# Write REG_CC_CNF (Coulomb Counter Configuration) only if mixed-mode is used with an external sense Resistor
+I2C_Write @0x0F 0x95
+I2C_Write @0x10 0x03
+
+# Write REG_ALARM_SOC   (default value: 0x02)
+I2C_Write @0x13 0x02
+
+# Write REG_ALARM_VOLTAGE   (default value: 0xAA)
+I2C_Write @0x14 0xAA
+
+# Write IO0DATA for Alarm pin (default bit value is 1: driven by alarm condition)
+I2C_Write @0x01 0x01
+
+# Write back REG_OCV (if the same battery is used and was not disconnected)
+I2C_Write @0x0D MYDATA1    #(2 byte length)
+
+# Write VMODE bit (e.g. to Mixed mode)
+I2C_Write @0x00 0x08
+
+# Start the device monitoring: Set GG_RUN bit to 1 
+# (Note: Enable GG_RUN only at the end of the init sequence)
+# (for instance set register value to 0x18)
+I2C_Write @0x00 0x18
+
+
+# Now read periodically (every 5s) the State Of Charge of the battery
+loop
+{
+	#read REG_SOC
+	I2C_Read @0x02 & @0x03    #(2 byte length)
+}
+
