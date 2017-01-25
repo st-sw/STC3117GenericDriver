@@ -43,7 +43,7 @@ Compatible battery:
 ----------------
 Any single cell Lithium-Ion battery .
 For multi-cells battery, the hardware implementation needs to be slightly changed.
-Battery voltage max: Can monitor any battery from 2.7V to 5V.
+Battery voltage max: Can monitor any battery from 2.7V to 4.5V.
 
 Notes:
 ----------------
