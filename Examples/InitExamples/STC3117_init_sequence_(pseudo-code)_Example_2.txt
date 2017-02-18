@@ -30,7 +30,6 @@ I2C_Write @0x01 0x10
 
 # Wait the Device is ready (i.e. wait it finished the initial measurements)
 # Status is checked by waiting REG_COUNTER value is 3 or more, or by waiting 1.5s after reset.
-
 loop while VALUE < 3
 {
 	#read REG_COUNTER

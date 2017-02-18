@@ -18,7 +18,7 @@
 
 # Connect a battery
 # or
-# Wait the current battery is relaxed (30s or more) after a charge or discharge. This is required for an accurate initial measurement
+# Wait the current battery is relaxed (30s or more) after a charge or discharge. This is recommended for an accurate initial measurement
 
 # Check I2C is working & Device ID is correct (value must be equal to 0x16 for STC3117)
 I2C_Read @0x18
@@ -39,7 +39,6 @@ I2C_Write @0x01 0x05
 
 # [Optional]: Wait the Device is ready (i.e. wait it finished the initial measurements)
 # Status is checked by waiting REG_COUNTER value is >= 3, or by waiting 1.5s
-
 loop while VALUE < 3
 {
 	#read REG_COUNTER

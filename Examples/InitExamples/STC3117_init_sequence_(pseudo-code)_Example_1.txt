@@ -40,6 +40,7 @@ loop while VALUE < 3
 }
 
 # Start the device monitoring: Set GG_RUN bit to 1
+# (Note: Enable GG_RUN only at the end of the init sequence)
 # (for instance set register value to 0x19)
 I2C_Write @0x00 0x19
 
@@ -50,7 +51,8 @@ I2C_Read @0x04 & @0x05    #(2 byte length)
 I2C_Read @0x04 & @0x05    #(2 byte length)
 
 
-# Now read periodically (every 5s) the available monitoring values: Battery Voltage (REG_VOLTAGE) and Device Temperature (REG_TEMPERATURE)
+# Now read periodically (every 5s) the available monitoring values: 
+#     Battery Voltage (REG_VOLTAGE) and Device Temperature (REG_TEMPERATURE)
 
 loop periodically
 {
