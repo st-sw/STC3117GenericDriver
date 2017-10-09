@@ -78,6 +78,7 @@ typedef struct  {
   int ForceExternalTemperature;
   int Ropt;  
   int Var1;
+  int Initialized;
 } GasGauge_DataTypeDef;
 
 

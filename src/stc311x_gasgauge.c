@@ -1352,6 +1352,8 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 {
 	int res, i;
 
+	GG->Initialized = 0;
+	
 	BattData.Cnom = GG->Cnom;
 	BattData.Rsense = GG->Rsense;
 	BattData.Rint = GG->Rint;
@@ -1427,6 +1429,8 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 
 	Reset_FSM_GG();
 
+	GG->Initialized = 1; //fully initialized
+	
 	return(res);    /* return -1 if I2C error or STC311x not present */
 }
 
@@ -1505,6 +1509,9 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 	res=STC311x_GetUpdatedBatteryData(&BattData);  /* read battery data into global variables */
 	if (res!=0) return(-1); /* abort in case of I2C failure */
 
+	if (GG->Initialized != 1) return(-2); /* abort if GasGauge_Start() has not been called before GasGauge_Task() in a multi-thread system */
+	
+	
 	/* check if RAM data is ok (battery has not been changed) */
 	STC311x_ReadRamData(GG_Ram.db);
 	if ( (GG_Ram.reg.TestWord!= RAM_TESTWORD) || (calcCRC8(GG_Ram.db,RAM_SIZE)!=0) )
