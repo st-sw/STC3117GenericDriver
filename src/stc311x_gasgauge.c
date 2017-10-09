@@ -1592,8 +1592,11 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		{
 			BattData.BattOnline = 1;  //battery connected
 		}
-
-		SOC_correction_process(GG);
+		
+		if(GG->Vmode == MIXED_MODE) //improvement in mixed mode only
+		{
+			SOC_correction_process(GG);
+		}
 
 		/* SOC derating with temperature */
 		BattData.SOC = CompensateSOC(BattData.SOC,BattData.Temperature);
