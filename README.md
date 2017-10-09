@@ -45,6 +45,11 @@ Any single cell Lithium-Ion battery .
 For multi-cells battery, the hardware implementation needs to be slightly changed.
 Battery voltage max: Can monitor any battery from 2.7V to 4.5V.
 
+Links:
+----------------
+Product page: &nbsp;&nbsp;&nbsp;  http://www.st.com/en/power-management/stc3117.html  
+Blog : &nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;  http://blog.st.com/stc3117-battery-fuel-gauge-optimgauge/  
+
 Notes:
 ----------------
 Source code Examples are based on STC3115 drivers (the previous generation device).  
