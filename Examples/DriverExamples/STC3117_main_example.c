@@ -104,7 +104,7 @@ GasGauge_Restart:
 		goto GasGauge_Restart;
 	}
 
-#else //simple implementation but without timeout checking (can be stucked)
+#else //simple implementation but without timeout checked (can be stucked)
 
 	CounterValue = 0;
 	while(CounterValue < 3) //wait till device ready
@@ -299,7 +299,7 @@ static void GasGauge_DefaultInit(GasGauge_DataTypeDef * GG_struct)
 	GG_struct->Rsense = RSENSE;      /* sense resistor mOhms */   //Warning: Hardware dependant. Put the corresponding used value
 	GG_struct->RelaxCurrent = GG_struct->Cnom/20;  /* current for relaxation (< C/20) mA */
 
-	GG_struct->ForceExternalTemperature = 0; //do not force Temperature but Gas gauge measures it
+	GG_struct->ForceExternalTemperature = 0; //0: do not force Temperature but Gas gauge measures it
 
 }
 
