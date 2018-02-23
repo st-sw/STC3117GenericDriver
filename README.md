@@ -10,7 +10,7 @@ Device:       STC3117 Battery Gas gauge
 Manufacturer: STMicroelectronics  
 
 Typical Application:  Monitor a single cell battery <br />
-Features: Measure the Voltage, Current, and Temperature.
+Features: Measure the Voltage, Current, and Temperature. And then report the State of charge (%) <br />
 Package:      CSP (9 pins) <br />
 Operating supply: 2.7V to 4.5V  <br />
 
