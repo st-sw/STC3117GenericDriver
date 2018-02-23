@@ -45,8 +45,8 @@ The STC3117 driver uses the ST OptimGauge(tm) algorithm to provide the Optimum a
 
 Compatible battery:
 ----------------
-Any single cell Lithium-Ion battery.
-For multi-cells battery, the hardware implementation needs to be slightly changed.
+Any single cell Lithium-Ion battery. <br />
+For multi-cells battery, the hardware implementation needs to be slightly changed. <br />
 Battery voltage max: Can monitor any battery from 2.7V to 4.5V.
 
 Links:
