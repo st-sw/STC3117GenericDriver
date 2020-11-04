@@ -43,6 +43,7 @@
 #define CHG_MIN_CURRENT     150   /* min charge current in mA                       */
 #define CHG_END_CURRENT      20   /* end charge current in mA                       */
 #define APP_MIN_CURRENT     (-5)  /* minimum application current consumption in mA ( <0 !) */
+#define APP_EOC_CURRENT      100   		/* end charge current in mA                 */
 #define APP_MIN_VOLTAGE	    3000  /* application cut-off voltage                    */
 #define TEMP_MIN_ADJ	    (-5)  /* minimum temperature for gain adjustment */
 

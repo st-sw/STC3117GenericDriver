@@ -54,7 +54,7 @@ int STC31xx_RelaxTmrSet(int CurrentThreshold);
 /* define TEMP_COMPENSATION_SOC to enable SOC temperature compensation */
 #define TEMP_COMPENSATION_SOC
 
-#define OCV_RAM_BACKUP
+#define OCV_RAM_BACKUP //Optional feature to improve SOC accuracy after a reset
 
 //#define BATD_UC8 //Optional: basic reset of the gas gauge in case of error event occurs (BATD or UVLO)
 
@@ -245,7 +245,7 @@ typedef struct  {
 static STC311x_BattDataTypeDef BattData;   /* STC311x data */
 
 /* structure of the STC311x RAM registers for the Gas Gauge algorithm data */
-static union {
+static union InternalRAM {
 	unsigned char db[RAM_SIZE];  /* last byte holds the CRC */
 	struct {
 		short int TestWord;     /* 0-1 Test Word for verification */
@@ -254,7 +254,12 @@ static union {
 		short int VM_cnf;      /* 6-7 current VM_cnf */
 		char SOC;              /* 8 SOC for trace (in %) */
 		char GG_Status;        /* 9  */
-		/* bytes ..RAM_SIZE-2 are free, last byte RAM_SIZE-1 is the CRC */
+		char unused1;         /* 10  -Bytes upto ..STC311x_RAM_SIZE-2 are free				*/
+		char unused2;         /* 11  -Bytes upto ..STC311x_RAM_SIZE-2 are free				*/
+		char unused3;         /* 12  -Bytes upto ..STC311x_RAM_SIZE-2 are free				*/
+		char unused4;         /* 13  -Bytes upto ..STC311x_RAM_SIZE-2 are free				*/
+		char unused5;         /* 14  -Bytes upto ..STC311x_RAM_SIZE-2 are free				*/
+		char CRC;             /* 15  last byte STC311x_RAM_SIZE-1 is the CRC				*/
 	} reg;
 } GG_Ram;
 
@@ -445,7 +450,7 @@ static int STC31xx_WriteWord16(int RegAddress, int Value)
 /* -------------------------------------------------------------------------- */
 
 static int UpdateRamCrc(unsigned char * p_RamData);
-static int STC311x_WriteRamData(unsigned char *RamData);
+static int STC311x_WriteDataToRam(unsigned char *RamData);
 
 /* -------------------------------------------------------------------------- */
 
@@ -593,22 +598,6 @@ static void STC311x_SetInitialParamAndRun(void)
 }  
 
 
-/*******************************************************************************
-* Function Name  : STC31xx_SaveBackupData
-* Description    : Save Backup data to RAM for restoration process
-* Input          : None
-* Return         : -1 if error
-*******************************************************************************/
-int STC31xx_SaveBackupData(unsigned char * p_RamData)
-{
-	int status;
-
-	/* update the RAM crc8 */
-	UpdateRamCrc(p_RamData);
-
-	status = STC311x_WriteRamData(p_RamData);
-	return status;
-}
 
 /*******************************************************************************
 * Function Name  : STC311x_Startup
@@ -646,12 +635,30 @@ static int STC311x_Startup(void)
 
 
 /*******************************************************************************
-* Function Name  : STC311x_Restore
+* Function Name  : STC31xx_SaveBackupSocToRam
+* Description    : Save Backup data to RAM for restoration process
+* Input          : None
+* Return         : -1 if error
+*******************************************************************************/
+int STC31xx_SaveBackupSocToRam(unsigned char * p_RamData)
+{
+	int status;
+
+	/* update the RAM crc8 */
+	UpdateRamCrc(p_RamData);
+
+	status = STC311x_WriteDataToRam(p_RamData);
+	return status;
+}
+
+
+/*******************************************************************************
+* Function Name  : STC311x_RestoreFromRam
 * Description    :  Restore STC311x state
 * Input          : None
 * Return         : 
 *******************************************************************************/
-static int STC311x_Restore(void)
+static int STC311x_RestoreFromRam(void)
 {
 	int res;
 	int ocv;
@@ -666,13 +673,15 @@ static int STC311x_Restore(void)
 	STC311x_SetInitialParamAndRun();  /* set main parameters et restore RAM parameters */
 
 #ifdef OCV_RAM_BACKUP
-	/* if restore from unexpected reset, restore SOC from RAM backup (system dependent) */
+	/* if restore from unexpected reset, restore last SOC from RAM backup (system dependent) */
 	if (GG_Ram.reg.GG_Status == GG_RUNNING)
-		if (GG_Ram.reg.SOC != 0)
-			STC31xx_WriteWord16(STC311x_REG_SOC, GG_Ram.reg.HRSOC);  /*   restore SOC */
+	{
+		if( (GG_Ram.reg.SOC != 0) && (GG_Ram.reg.HRSOC != 0) )
+			STC31xx_WriteWord16(STC311x_REG_SOC, GG_Ram.reg.HRSOC);  /* force to restore the last SOC */
+	}
 #else  
 	/* rewrite ocv to start SOC with updated OCV curve */
-	STC31xx_WriteWord16(STC311x_REG_OCV,ocv);
+	STC31xx_WriteWord16(STC311x_REG_OCV, ocv);
 #endif  
 	return(0);
 }
@@ -1010,12 +1019,12 @@ static int STC311x_ReadRamData(unsigned char *RamData)
 
 
 /*******************************************************************************
-* Function Name  : STC311x_WriteRamData
+* Function Name  : STC311x_WriteDataToRam
 * Description    : utility function to write the RAM data into STC311x
 * Input          : ref to RAM data array
 * Return         : error status (STC31XX_OK, !STC31XX_OK)
 *******************************************************************************/
-static int STC311x_WriteRamData(unsigned char *RamData)
+static int STC311x_WriteDataToRam(unsigned char *RamData)
 {
 	return(STC31xx_Write(RAM_SIZE, STC311x_REG_RAM, RamData));
 }
@@ -1087,6 +1096,7 @@ static int UpdateRamCrc(unsigned char * p_RamData)
 
 	res=calcCRC8(p_RamData, RAM_SIZE-1);
 	p_RamData[RAM_SIZE-1] = res;   /* last byte holds the CRC */
+	//p_RamData.reg.CRC = res;   /* last byte holds the CRC */
 	return(res);
 }
 
@@ -1419,13 +1429,13 @@ int GasGauge_Start(GasGauge_DataTypeDef *GG)
 		}
 		else //RAM backup content is valid, so use the restoration process to improve accuracy
 		{
-			res=STC311x_Restore(); /* recover from last SOC */
+			res=STC311x_RestoreFromRam(); /* recover from last SOC */
 		}
 	}
 
 
 	GG_Ram.reg.GG_Status = GG_INIT;
-	STC31xx_SaveBackupData(GG_Ram.db);
+	STC31xx_SaveBackupSocToRam(GG_Ram.db);
 
 	Reset_FSM_GG();
 
@@ -1459,7 +1469,7 @@ void GasGauge_Reset(void)
 {
 	GG_Ram.reg.TestWord=0;  /* reset RAM */
 	GG_Ram.reg.GG_Status = 0;
-	STC311x_WriteRamData(GG_Ram.db);
+	STC311x_WriteDataToRam(GG_Ram.db);
 
 	STC311x_Reset();
 }
@@ -1479,7 +1489,7 @@ int GasGauge_Stop(void)
 	STC311x_ReadRamData(GG_Ram.db);
 	GG_Ram.reg.GG_Status= GG_POWERDN;
 
-	STC31xx_SaveBackupData(GG_Ram.db);
+	STC31xx_SaveBackupSocToRam(GG_Ram.db);
 
 	res=STC311x_Powerdown();
 	if (res!=0) return (-1);  /* error */
@@ -1548,7 +1558,7 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 	if ((BattData.STC_Status & M_RUN_MSK) == 0)
 	{
 		/* if not running, restore STC3115 */
-		STC311x_Restore();  
+		STC311x_RestoreFromRam();  
 		GG_Ram.reg.GG_Status = GG_INIT;
 	}
 
@@ -1643,10 +1653,10 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		if (BattData.Vmode == MIXED_MODE)
 		{
 			// Lately fully compensation
-			if(BattData.AvgCurrent > 0 && BattData.SOC >= 990 && BattData.SOC < 995 && BattData.AvgCurrent > 100)
+			if(BattData.AvgCurrent > 0 && BattData.SOC >= 990 && BattData.SOC < 995 && BattData.AvgCurrent > APP_EOC_CURRENT)
 			{
 				BattData.SOC = 990;
-				STC311x_SetSOC(99*512);
+				STC311x_SetSOC(99*512); //99% (99*512= 50688) //force a new SoC displayed by fuel gauge
 			}
 
 			// Lately empty compensation
@@ -1700,11 +1710,11 @@ int GasGauge_Task(GasGauge_DataTypeDef *GG)
 		}
 	}
 
-	/* save periodically the last valid SOC in the embedded RAM */
+	/* save periodically the last valid SOC to internal RAM (in case of future Restore process) */
 	{
 		GG_Ram.reg.HRSOC = BattData.HRSOC;
 		GG_Ram.reg.SOC = (GG->SOC+5)/10;    /* trace SOC in % */
-		STC31xx_SaveBackupData(GG_Ram.db);
+		STC31xx_SaveBackupSocToRam(GG_Ram.db);
 	}
 
 	if (GG_Ram.reg.GG_Status==GG_RUNNING)
